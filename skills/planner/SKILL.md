@@ -38,9 +38,10 @@ PLANNING PHASE (steps 1-N)
 Write plan to file
     |
     v
-REVIEW PHASE (steps 1-2)
+REVIEW PHASE (steps 1-3)
     |-- Step 1: @agent-technical-writer (plan-annotation)
-    |-- Step 2: @agent-quality-reviewer (plan-review)
+    |-- Step 2: @agent-contract-specifier (contract specification)
+    |-- Step 3: @agent-quality-reviewer (plan-review)
     v
 APPROVED --> /plan-execution
 ```
@@ -120,7 +121,7 @@ After writing the plan file, transition to review phase:
 python3 scripts/planner.py \
   --phase review \
   --step-number 1 \
-  --total-steps 2 \
+  --total-steps 3 \
   --thoughts "Plan written to [path/to/plan.md]"
 ```
 
@@ -138,7 +139,27 @@ TW will:
 
 **This step is never skipped.** Even if plan prose seems complete, code comments from the planning phase require temporal contamination review.
 
-### Review Step 2: Quality Reviewer Validation
+### Review Step 2: Contract Specification
+
+Delegate to @agent-contract-specifier with mode: `plan-analysis`
+
+Contract Specifier will:
+
+- Analyze the plan and identify components needing formal contracts
+- Define preconditions, postconditions, and invariants for HIGH priority components
+- Specify boundary conditions and error behaviors
+- Add contracts to plan file or separate contracts file (see Contracts section below)
+
+**Why contracts matter**: Contracts formalize behavioral expectations BEFORE implementation. They:
+
+- Eliminate ambiguity that causes implementation variance
+- Define edge cases upfront rather than discovering them during testing
+- Remove design decision burden from @agent-developer
+- Provide testable acceptance criteria for @agent-quality-reviewer
+
+**This step is never skipped.** Contract Specifier will analyze the plan and determine which components need contracts (HIGH/MEDIUM/LOW priority). Even simple plans benefit from explicit boundary condition documentation.
+
+### Review Step 3: Quality Reviewer Validation
 
 Delegate to @agent-quality-reviewer with mode: `plan-review`
 
@@ -147,6 +168,7 @@ QR will:
 - Check production reliability (RULE 0)
 - Check project conformance (RULE 1)
 - Verify TW annotations are sufficient
+- **Verify contracts are testable and complete**
 - Exclude risks already documented in Planning Context
 - Return verdict: PASS | PASS_WITH_CONCERNS | NEEDS_CHANGES
 
@@ -342,6 +364,172 @@ Independent milestones can execute in parallel during /plan-execution.
 
 ---
 
+## Contracts
+
+Contracts are formal specifications that define behavioral expectations BEFORE implementation. They are a critical quality gate that prevents entire classes of defects.
+
+### Why Contracts Are Essential
+
+| Without Contracts | With Contracts |
+|-------------------|----------------|
+| Ambiguous specs lead to implementation variance | Precise specs eliminate guesswork |
+| Edge cases discovered during testing | Edge cases specified upfront |
+| Developer makes design decisions | Developer executes specifications |
+| QR finds issues after implementation | QR verifies against defined contracts |
+| Bugs caught late (expensive) | Bugs prevented early (cheap) |
+
+### Contract Types
+
+| Type | Purpose | Example |
+|------|---------|---------|
+| **Preconditions** | What must be true BEFORE function executes | `requires: user_id is non-empty string` |
+| **Postconditions** | What will be true AFTER function completes | `ensures: returns sorted list in ascending order` |
+| **Invariants** | What must ALWAYS be true | `invariant: account.balance >= 0` |
+| **Boundary conditions** | Behavior at edges | `empty list → returns empty list` |
+| **State transitions** | Valid state changes | `IDLE → RUNNING (guard: queue non-empty)` |
+
+### When Contracts Are Required
+
+**Always require contracts for:**
+- Public APIs and external interfaces
+- Functions with complex validation logic
+- State machines and stateful components
+- Operations with multiple valid approaches
+- Error-prone operations (I/O, concurrency, parsing)
+- Security-sensitive code (auth, crypto, input validation)
+
+**Contracts are optional for:**
+- Simple getters/setters
+- Pure utility functions with obvious behavior
+- Internal helpers with single call site
+- Boilerplate and generated code
+
+### Contract Location in Repository
+
+Contracts should be discoverable and maintainable. Choose a location based on project complexity.
+
+**Decision heuristic:**
+```
+Default: Option 1 (inline in plan)
+  └── 10+ components with contracts? → Option 2 (dedicated directory)
+  └── Strong module ownership/boundaries? → Option 3 (co-location)
+
+Within a repository, use ONE pattern consistently.
+```
+
+#### Option 1: Inline in Plan File (Default)
+
+For most projects, embed contracts directly in the plan's milestone specifications:
+
+```markdown
+### Milestone 2: User Validation
+
+**Contracts**:
+
+## Contract: validate_email(email: str) -> bool
+
+### Preconditions
+- requires: email is non-null string
+
+### Postconditions
+- ensures: returns True if email matches RFC 5322 format
+- ensures: returns False otherwise (never raises)
+
+### Boundary Conditions
+| Input | Expected |
+|-------|----------|
+| "" | False |
+| "user@domain.com" | True |
+| "invalid" | False |
+```
+
+#### Option 2: Dedicated Contracts Directory (Complex Projects)
+
+For large projects with many contracts, create a dedicated directory:
+
+```
+project/
+├── src/
+│   └── services/
+│       ├── user_service.py
+│       └── payment_service.py
+├── contracts/                    # Dedicated contracts directory
+│   ├── README.md                 # Contract conventions
+│   ├── user_service.contracts.md
+│   └── payment_service.contracts.md
+└── docs/
+    └── plans/
+```
+
+**When to use dedicated directory:**
+- 10+ components with formal contracts
+- Contracts need versioning independent of code
+- Multiple teams reference the same contracts
+- Regulatory requirements mandate specification documentation
+
+#### Option 3: Alongside Source Files (Domain-Driven)
+
+For domain-driven designs, co-locate contracts with their implementations:
+
+```
+src/
+├── auth/
+│   ├── auth.py
+│   ├── auth.contracts.md         # Contracts for this module
+│   └── auth_test.py
+├── payments/
+│   ├── payments.py
+│   ├── payments.contracts.md
+│   └── payments_test.py
+```
+
+**When to use co-location:**
+- Strong module boundaries
+- Teams own specific modules end-to-end
+- Contracts evolve with implementations
+
+### Contract-to-Code Traceability
+
+Contracts should trace to implementation. Recommended patterns:
+
+**In code (assertions):**
+```python
+def validate_email(email: str) -> bool:
+    # Contract: requires email is non-null string
+    assert email is not None, "Precondition: email must be non-null"
+
+    result = _validate_email_format(email)
+
+    # Contract: ensures returns bool (never raises)
+    assert isinstance(result, bool)
+    return result
+```
+
+**In tests (property-based):**
+```python
+@pytest.mark.parametrize("input,expected", [
+    ("", False),                    # Boundary: empty
+    ("user@domain.com", True),      # Boundary: valid
+    ("invalid", False),             # Boundary: missing @
+])
+def test_validate_email_contract(input, expected):
+    """Verifies: validate_email boundary conditions"""
+    assert validate_email(input) == expected
+```
+
+### CLAUDE.md Index Entry
+
+When contracts exist, add them to CLAUDE.md:
+
+```markdown
+| File/Directory | Contents | Read When |
+|----------------|----------|-----------|
+| `contracts/` | Formal specifications (pre/post/invariants) | Implementing features, writing tests, reviewing PRs |
+| `contracts/user_service.contracts.md` | User validation contracts | Modifying user validation logic |
+```
+
+---
+
 ## Resources
 
 | Resource                              | Purpose                                                 |
@@ -363,9 +551,12 @@ python3 scripts/planner.py --step-number 2 --total-steps 4 --thoughts "..."
 # Backtrack if needed
 python3 scripts/planner.py --step-number 2 --total-steps 4 --thoughts "New info invalidated prior decision..."
 
-# Start review (after plan written)
-python3 scripts/planner.py --phase review --step-number 1 --total-steps 2 --thoughts "Plan at ..."
+# Start review (after plan written) - 3 steps: TW → Contracts → QR
+python3 scripts/planner.py --phase review --step-number 1 --total-steps 3 --thoughts "Plan at ..."
 
-# Continue review
-python3 scripts/planner.py --phase review --step-number 2 --total-steps 2 --thoughts "TW done ..."
+# Contract specification
+python3 scripts/planner.py --phase review --step-number 2 --total-steps 3 --thoughts "TW done, contracts needed for ..."
+
+# Quality review
+python3 scripts/planner.py --phase review --step-number 3 --total-steps 3 --thoughts "Contracts defined, ready for QR..."
 ````
