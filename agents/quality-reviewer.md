@@ -394,6 +394,72 @@ Technical Writer annotates the plan BEFORE you review it. Verify annotations are
 | WHY-not-WHAT            | Comments explain rationale, not code mechanics    | List comments that restate what code does             |
 | Coverage                | Non-obvious struct fields/functions have comments | List undocumented non-obvious elements                |
 
+### Contract Validation
+
+Plans may include contracts (preconditions, postconditions, invariants) defined by @agent-contract-specifier (authoritative source for contract patterns) or implied in code logic. Validate that implementations respect contracts without circumvention.
+
+**Contract Circumvention Pattern (RULE 0 violation):**
+
+Code that checks a precondition-like condition (null check, range validation, type check) then returns a default/fallback value instead of propagating an error.
+
+| Pattern Element | Violation Signal | Correct Alternative |
+|----------------|------------------|---------------------|
+| Input validation | `if input is None` or `if x < 0` | Same check |
+| Response to violation | `return default_value` or `return []` | `raise ValueError` or `return Error` |
+| Effect | Caller receives success with default; violation hidden | Caller receives error; violation explicit |
+
+**Detection Heuristic:**
+
+1. Find code that validates inputs (null, range, type, format checks)
+2. Check response to validation failure
+3. If response is return-with-value (not raise/error) → flag as potential circumvention
+
+**Why this pattern signals circumvention**: Return-with-value makes the caller unable to distinguish success-with-default from precondition-violation. The violation becomes a silent failure that propagates through the system, creating data integrity risks.
+
+**Exception:** If plan's Decision Log explicitly documents "return default on invalid input" with rationale (e.g., "legacy API requires non-null response"), this is a documented design choice, not a violation. Do not flag. Rationale: Documented tradeoffs in Decision Log indicate intentional design rather than accidental circumvention.
+
+**Contrastive Examples:**
+
+<example type="INCORRECT" category="contract_circumvention">
+```python
+def process_items(items: list):
+    # Precondition: items must be non-empty
+    if not items:
+        return []  # VIOLATION: returns default, hides precondition violation
+    return [transform(item) for item in items]
+```
+
+Finding: "RULE 0 CRITICAL: Contract circumvention in process_items()"
+- Location: process_items function
+- Issue: Precondition check (non-empty list) returns empty list on violation instead of failing explicitly
+- Failure Mode: Caller cannot distinguish between "processed zero items" and "violated precondition". Silent failure propagates through system.
+- Suggested Fix: Replace `return []` with `raise ValueError("items must be non-empty")`
+</example>
+
+<example type="CORRECT" category="error_propagation">
+```python
+def process_items(items: list):
+    # Precondition: items must be non-empty
+    if not items:
+        raise ValueError("items must be non-empty")  # CORRECT: explicit failure
+    return [transform(item) for item in items]
+```
+
+Not flagged: Precondition violation results in explicit error propagation.
+</example>
+
+<example type="CORRECT" category="defensive_programming">
+```python
+def fetch_user(user_id: int):
+    # Validate external input
+    if user_id < 0:
+        raise ValueError("user_id must be non-negative")  # CORRECT: validates and propagates
+    # ... fetch from database
+```
+
+Not flagged: Defensive programming that propagates errors to caller.
+</example>
+
 **Temporal contamination detection** (Factored Verification):
 
 <factored_contamination_check>
@@ -555,6 +621,7 @@ STOP before producing output. Verify each item:
 - [ ] If `plan-review`: I read `## Planning Context` section and excluded "Known Risks" from my findings
 - [ ] If `plan-review`: I wrote out CONTEXT FILTER before reviewing milestones
 - [ ] If `plan-review`: I checked all code comments for temporal contamination (four detection questions)
+- [ ] If `plan-review`: I checked code snippets for contract circumvention (validate precondition → return default pattern)
 - [ ] For each RULE 0 finding: I named the specific failure mode
 - [ ] For each RULE 0 finding: I used open verification questions (not yes/no)
 - [ ] For each CRITICAL finding: I verified via dual-path reasoning

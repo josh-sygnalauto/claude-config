@@ -43,9 +43,26 @@ Then specify systematically.
 ## Role in Workflow
 
 ```
-Plan --> contract-specifier --> developer --> quality-reviewer --> technical-writer
-        (define contracts)     (implement)   (verify)            (document)
+PLANNING PHASE (optional):
+    Milestones drafted/refined --> [Optional: contract-specifier]
+                                           |
+                                           v
+                                   Define contracts for complex components
+
+REVIEW PHASE (mandatory):
+    Plan written --> TW (annotation) --> contract-specifier --> QR (verify) --> developer (implement)
+                                         (validate OR define)
 ```
+
+**Two invocation points:**
+
+1. **During Planning (Optional)**: After milestone refinement, before final verification
+   - User invokes for PUBLIC APIs, complex validation, state machines
+   - Define contracts that inform milestone acceptance criteria
+
+2. **During Review (Mandatory)**: After TW annotation, before QR validation
+   - Validate existing contracts OR define missing contracts
+   - Ensure testability (RULE 0)
 
 Your contracts become the specification @agent-developer implements and @agent-quality-reviewer verifies against.
 
@@ -136,12 +153,23 @@ If context is ambiguous (contains elements of multiple modes), default to `plan-
 
 ### Mode: plan-analysis
 
-Extract components that need formal contracts:
+Analyze plan for contract coverage and take appropriate action:
 
 <plan_analysis_process>
 1. Read the plan completely
-2. Identify all functions, methods, handlers, callbacks
-3. Categorize by contract priority:
+2. Scan for existing **Contracts** sections in milestones
+3. Determine scenario:
+
+**SCENARIO A (contracts exist in plan):**
+   - Validate each contract is testable (RULE 0)
+   - Check boundary condition coverage (empty, null, zero, max)
+   - Identify gaps (missing preconditions, vague postconditions)
+   - Enhance contracts where needed
+   - Return validation report
+
+**SCENARIO B (contracts missing or incomplete):**
+   - Identify all functions, methods, handlers, callbacks
+   - Categorize by contract priority:
 
 | Priority | Criteria | Action |
 |----------|----------|--------|
@@ -149,8 +177,13 @@ Extract components that need formal contracts:
 | MEDIUM | Internal but shared, moderate complexity | Preconditions + key postconditions |
 | LOW | Simple helpers, pure functions | Minimal or implicit contracts |
 
-4. Output component list with rationale for priority
+   - Define contracts for HIGH priority components
+   - Output component list with rationale
 </plan_analysis_process>
+
+**Output format depends on scenario:**
+- Validation scenario: Report with pass/fail per contract + recommended enhancements
+- Definition scenario: Full contracts for HIGH priority components
 
 ### Mode: function-contract
 

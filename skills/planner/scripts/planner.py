@@ -63,6 +63,7 @@ def get_planning_step_guidance(step_number: int, total_steps: int) -> dict:
                 "  - Acceptance criteria: testable pass/fail assertions?",
                 "  - Code changes: diff format for non-trivial logic?",
                 "  - Uncertainty flags: added where applicable?",
+                "  - Contracts: defined for PUBLIC APIs and complex logic?",
                 "</milestone_verification>",
                 "",
                 "<documentation_milestone_verification>",
@@ -100,11 +101,12 @@ def get_planning_step_guidance(step_number: int, total_steps: int) -> dict:
                 "  - Code ships without WHY documentation\n"
                 "  - QR findings surface during execution, not before\n\n"
                 "2. Run this command to start review:\n\n"
-                "   python3 planner.py --phase review --step-number 1 --total-steps 2 \\\n"
+                "   python3 planner.py --phase review --step-number 1 --total-steps 3 \\\n"
                 '     --thoughts "Plan written to [path]"\n\n'
                 "Review phase:\n"
                 "  Step 1: @agent-technical-writer annotates code snippets\n"
-                "  Step 2: @agent-quality-reviewer validates the plan\n"
+                "  Step 2: @agent-contract-specifier validates/defines contracts\n"
+                "  Step 3: @agent-quality-reviewer validates the plan\n"
                 "  Then: Ready for /plan-execution"
             )
         }
@@ -229,12 +231,61 @@ def get_planning_step_guidance(step_number: int, total_steps: int) -> dict:
                 "",
                 "<step_3_validate>",
                 "Cross-check: Does the plan address ALL original requirements?",
+                "",
+                "CONTRACT CONSIDERATION:",
+                "  Do any components need formal contracts?",
+                "  - PUBLIC APIs or external interfaces?",
+                "  - Complex validation logic with multiple approaches?",
+                "  - State machines or stateful components?",
+                "  - Error-prone operations (I/O, concurrency, parsing)?",
+                "  - Security-sensitive code (auth, crypto, validation)?",
+                "",
+                "If YES to any: consider adding contract specification step before final verification.",
                 "</step_3_validate>",
             ],
-            "next": f"Invoke step {next_step} with refined milestones, risks, and uncertainty flags."
+            "next": (
+                f"Options:\n"
+                f"  - If contracts needed: Invoke step 4 (adjust total-steps) with contract needs\n"
+                f"  - If no contracts: Invoke final verification step (current total-steps)"
+            )
         }
 
-    # Steps 4+
+    if step_number == 4:
+        return {
+            "actions": [
+                "<contract_specification_step>",
+                "Define formal contracts for complex components identified in step 3.",
+                "",
+                "COMPONENTS NEEDING CONTRACTS:",
+                "  Review each milestone for:",
+                "  - PUBLIC APIs (user-facing functions)",
+                "  - Complex validation (multiple valid approaches)",
+                "  - State machines (state transitions)",
+                "  - Error-prone logic (I/O, concurrency, parsing)",
+                "  - Security-sensitive (authentication, authorization, cryptography)",
+                "",
+                "FOR EACH COMPONENT:",
+                "  Define inline in milestone specification:",
+                "  ",
+                "  **Contracts**:",
+                "  ",
+                "  ### Contract: function_name",
+                "  **Preconditions**: requires caller to provide [specific conditions]",
+                "  **Postconditions**: ensures function returns/guarantees [specific outcomes]",
+                "  **Boundary Conditions**: behavior for empty, null, zero, max [concrete values]",
+                "  **Error Behaviors**: raises/returns [specific error types and conditions]",
+                "",
+                "TESTABILITY CHECK:",
+                "  For each condition: What test would verify this?",
+                "  If you can't describe a concrete test → rewrite the condition.",
+                "",
+                "See @agent-contract-specifier documentation for patterns and examples.",
+                "</contract_specification_step>",
+            ],
+            "next": f"Invoke step {next_step} with contracts defined, ready for final verification."
+        }
+
+    # Steps 5+
     remaining = total_steps - step_number
     return {
         "actions": [
@@ -303,7 +354,7 @@ def get_review_step_guidance(step_number: int, total_steps: int) -> dict:
             ],
             "next": (
                 f"After TW completes, invoke step {next_step}:\n"
-                "   python3 planner.py --phase review --step-number 2 --total-steps 2 "
+                "   python3 planner.py --phase review --step-number 2 --total-steps 3 "
                 '--thoughts "TW annotation complete, [summary of changes]"'
             )
         }
@@ -311,7 +362,48 @@ def get_review_step_guidance(step_number: int, total_steps: int) -> dict:
     if step_number == 2:
         return {
             "actions": [
-                "<review_step_2_delegate_qr>",
+                "<review_step_2_delegate_contract_specifier>",
+                "DELEGATE to @agent-contract-specifier:",
+                "",
+                "  <delegation>",
+                "    <agent>@agent-contract-specifier</agent>",
+                "    <mode>plan-analysis</mode>",
+                "    <plan_source>[path to plan file]</plan_source>",
+                "    <task>",
+                "      Read plan and determine contract coverage scenario:",
+                "",
+                "      SCENARIO A (contracts exist in plan - defined in planning step 4):",
+                "        1. Validate existing contracts are testable (RULE 0)",
+                "        2. Check boundary condition coverage (empty, null, max, zero)",
+                "        3. Identify gaps (missing preconditions, vague postconditions)",
+                "        4. Enhance contracts where needed",
+                "        5. Return validation report",
+                "",
+                "      SCENARIO B (no contracts or incomplete - planning step 4 was skipped):",
+                "        1. Analyze plan and identify components needing contracts",
+                "        2. Categorize by priority (HIGH/MEDIUM/LOW)",
+                "        3. Define contracts for HIGH priority components",
+                "        4. Add contracts to plan file (inline in milestones)",
+                "        5. Flag MEDIUM priority for consideration",
+                "",
+                "      Contract Specifier will determine which scenario applies.",
+                "    </task>",
+                "  </delegation>",
+                "",
+                "Wait for @agent-contract-specifier to complete.",
+                "</review_step_2_delegate_contract_specifier>",
+            ],
+            "next": (
+                f"After contract-specifier completes, invoke step {next_step}:\n"
+                "   python3 planner.py --phase review --step-number 3 --total-steps 3 "
+                '--thoughts "Contracts validated/defined, [summary]"'
+            )
+        }
+
+    if step_number == 3:
+        return {
+            "actions": [
+                "<review_step_3_delegate_qr>",
                 "DELEGATE to @agent-quality-reviewer:",
                 "",
                 "  <delegation>",
@@ -323,10 +415,12 @@ def get_review_step_guidance(step_number: int, total_steps: int) -> dict:
                 "      2. Write out CONTEXT FILTER before reviewing milestones",
                 "      3. Apply RULE 0 (production reliability) with open questions",
                 "      4. Apply RULE 1 (project conformance)",
-                "      5. Check anticipated structural issues",
-                "      6. Verify TW annotations pass actionability test",
-                "      7. Accept risks documented in Known Risks as acknowledged",
-                "      8. Pay extra attention to milestones with uncertainty flags",
+                "      5. Check for contract circumvention (validate precondition → return default pattern)",
+                "      6. Verify contracts are testable and complete",
+                "      7. Check anticipated structural issues",
+                "      8. Verify TW annotations pass actionability test",
+                "      9. Accept risks documented in Known Risks as acknowledged",
+                "      10. Pay extra attention to milestones with uncertainty flags",
                 "    </task>",
                 "    <expected_output>",
                 "      Verdict: PASS | PASS_WITH_CONCERNS | NEEDS_CHANGES",
@@ -334,13 +428,13 @@ def get_review_step_guidance(step_number: int, total_steps: int) -> dict:
                 "  </delegation>",
                 "",
                 "Wait for @agent-quality-reviewer verdict.",
-                "</review_step_2_delegate_qr>",
+                "</review_step_3_delegate_qr>",
             ],
             "next": (
                 "After QR returns verdict:\n"
-                "  - PASS or PASS_WITH_CONCERNS: Invoke step 3 to complete review\n"
+                "  - PASS or PASS_WITH_CONCERNS: Invoke step 4 to complete review\n"
                 "  - NEEDS_CHANGES: Address issues in plan, then restart review from step 1:\n"
-                "    python3 planner.py --phase review --step-number 1 --total-steps 2 \\\n"
+                "    python3 planner.py --phase review --step-number 1 --total-steps 3 \\\n"
                 '      --thoughts "Addressed QR feedback: [summary of changes]"'
             )
         }
@@ -353,6 +447,8 @@ def get_review_step_guidance(step_number: int, total_steps: int) -> dict:
                 "  - TW has annotated code snippets with WHY comments?",
                 "  - TW has enriched plan prose with rationale?",
                 "  - TW flagged any gaps in Planning Context rationale?",
+                "  - Contracts defined for PUBLIC APIs and complex components?",
+                "  - Contracts are testable (verified by contract-specifier)?",
                 "  - QR verdict is PASS or PASS_WITH_CONCERNS?",
                 "  - Any concerns from QR are documented or addressed?",
                 "</review_complete_verification>",
@@ -387,7 +483,7 @@ Examples:
   python3 planner.py --step-number 2 --total-steps 4 --thoughts "New constraint invalidates approach, reconsidering..."
 
   # Start review (after plan written)
-  python3 planner.py --phase review --step-number 1 --total-steps 2 --thoughts "Plan at plans/auth.md"
+  python3 planner.py --phase review --step-number 1 --total-steps 3 --thoughts "Plan at plans/auth.md"
 """
     )
 
