@@ -101,12 +101,13 @@ def get_planning_step_guidance(step_number: int, total_steps: int) -> dict:
                 "  - Code ships without WHY documentation\n"
                 "  - QR findings surface during execution, not before\n\n"
                 "2. Run this command to start review:\n\n"
-                "   python3 planner.py --phase review --step-number 1 --total-steps 3 \\\n"
+                "   python3 planner.py --phase review --step-number 1 --total-steps 4 \\\n"
                 '     --thoughts "Plan written to [path]"\n\n'
                 "Review phase:\n"
                 "  Step 1: @agent-technical-writer annotates code snippets\n"
                 "  Step 2: @agent-contract-specifier validates/defines contracts\n"
-                "  Step 3: @agent-quality-reviewer validates the plan\n"
+                "  Step 3: @agent-test-specifier defines test specifications\n"
+                "  Step 4: @agent-quality-reviewer validates the plan\n"
                 "  Then: Ready for /plan-execution"
             )
         }
@@ -395,7 +396,7 @@ def get_review_step_guidance(step_number: int, total_steps: int) -> dict:
             ],
             "next": (
                 f"After contract-specifier completes, invoke step {next_step}:\n"
-                "   python3 planner.py --phase review --step-number 3 --total-steps 3 "
+                "   python3 planner.py --phase review --step-number 3 --total-steps 4 "
                 '--thoughts "Contracts validated/defined, [summary]"'
             )
         }
@@ -403,7 +404,38 @@ def get_review_step_guidance(step_number: int, total_steps: int) -> dict:
     if step_number == 3:
         return {
             "actions": [
-                "<review_step_3_delegate_qr>",
+                "<review_step_3_delegate_test_specifier>",
+                "DELEGATE to @agent-test-specifier:",
+                "",
+                "  <delegation>",
+                "    <agent>@agent-test-specifier</agent>",
+                "    <mode>plan-analysis</mode>",
+                "    <plan_source>[path to plan file]</plan_source>",
+                "    <task>",
+                "      1. Analyze the plan and contracts to determine test strategies",
+                "      2. Define unit tests for function-level behavior verification",
+                "      3. Define integration tests for component interactions",
+                "      4. Define property-based tests for invariants (when applicable)",
+                "      5. Identify edge cases and boundary conditions from contracts",
+                "      6. Specify coverage strategy (which test types verify which behaviors)",
+                "      7. Add test specifications to plan file in each milestone's Test Specification section",
+                "    </task>",
+                "  </delegation>",
+                "",
+                "Wait for @agent-test-specifier to complete.",
+                "</review_step_3_delegate_test_specifier>",
+            ],
+            "next": (
+                f"After test-specifier completes, invoke step {next_step}:\n"
+                "   python3 planner.py --phase review --step-number 4 --total-steps 4 "
+                '--thoughts "Test specifications defined, [summary]"'
+            )
+        }
+
+    if step_number == 4:
+        return {
+            "actions": [
+                "<review_step_4_delegate_qr>",
                 "DELEGATE to @agent-quality-reviewer:",
                 "",
                 "  <delegation>",
@@ -417,10 +449,11 @@ def get_review_step_guidance(step_number: int, total_steps: int) -> dict:
                 "      4. Apply RULE 1 (project conformance)",
                 "      5. Check for contract circumvention (validate precondition → return default pattern)",
                 "      6. Verify contracts are testable and complete",
-                "      7. Check anticipated structural issues",
-                "      8. Verify TW annotations pass actionability test",
-                "      9. Accept risks documented in Known Risks as acknowledged",
-                "      10. Pay extra attention to milestones with uncertainty flags",
+                "      7. Verify test specifications cover all contract conditions",
+                "      8. Check anticipated structural issues",
+                "      9. Verify TW annotations pass actionability test",
+                "      10. Accept risks documented in Known Risks as acknowledged",
+                "      11. Pay extra attention to milestones with uncertainty flags",
                 "    </task>",
                 "    <expected_output>",
                 "      Verdict: PASS | PASS_WITH_CONCERNS | NEEDS_CHANGES",
@@ -428,13 +461,13 @@ def get_review_step_guidance(step_number: int, total_steps: int) -> dict:
                 "  </delegation>",
                 "",
                 "Wait for @agent-quality-reviewer verdict.",
-                "</review_step_3_delegate_qr>",
+                "</review_step_4_delegate_qr>",
             ],
             "next": (
                 "After QR returns verdict:\n"
-                "  - PASS or PASS_WITH_CONCERNS: Invoke step 4 to complete review\n"
+                "  - PASS or PASS_WITH_CONCERNS: Invoke step 5 to complete review\n"
                 "  - NEEDS_CHANGES: Address issues in plan, then restart review from step 1:\n"
-                "    python3 planner.py --phase review --step-number 1 --total-steps 3 \\\n"
+                "    python3 planner.py --phase review --step-number 1 --total-steps 4 \\\n"
                 '      --thoughts "Addressed QR feedback: [summary of changes]"'
             )
         }
@@ -449,6 +482,8 @@ def get_review_step_guidance(step_number: int, total_steps: int) -> dict:
                 "  - TW flagged any gaps in Planning Context rationale?",
                 "  - Contracts defined for PUBLIC APIs and complex components?",
                 "  - Contracts are testable (verified by contract-specifier)?",
+                "  - Test specifications defined for all non-trivial milestones?",
+                "  - Test specifications cover all contract conditions?",
                 "  - QR verdict is PASS or PASS_WITH_CONCERNS?",
                 "  - Any concerns from QR are documented or addressed?",
                 "</review_complete_verification>",

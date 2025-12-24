@@ -38,10 +38,11 @@ PLANNING PHASE (steps 1-N)
 Write plan to file
     |
     v
-REVIEW PHASE (steps 1-3)
+REVIEW PHASE (steps 1-4)
     |-- Step 1: @agent-technical-writer (plan-annotation)
     |-- Step 2: @agent-contract-specifier (contract specification)
-    |-- Step 3: @agent-quality-reviewer (plan-review)
+    |-- Step 3: @agent-test-specifier (test specification)
+    |-- Step 4: @agent-quality-reviewer (plan-review)
     v
 APPROVED --> /plan-execution
 ```
@@ -121,7 +122,7 @@ After writing the plan file, transition to review phase:
 python3 scripts/planner.py \
   --phase review \
   --step-number 1 \
-  --total-steps 3 \
+  --total-steps 4 \
   --thoughts "Plan written to [path/to/plan.md]"
 ```
 
@@ -159,7 +160,30 @@ Contract Specifier will:
 
 **This step is never skipped.** Contract Specifier will analyze the plan and determine which components need contracts (HIGH/MEDIUM/LOW priority). Even simple plans benefit from explicit boundary condition documentation.
 
-### Review Step 3: Quality Reviewer Validation
+### Review Step 3: Test Specification
+
+Delegate to @agent-test-specifier with mode: `plan-analysis`
+
+Test Specifier will:
+
+- Analyze the plan and contracts to determine test strategies
+- Define unit tests for function-level behavior verification
+- Define integration tests for component interactions
+- Define property-based tests for invariants (when applicable)
+- Identify edge cases and boundary conditions from contracts
+- Specify coverage strategy (which test types verify which behaviors)
+- Add test specifications to plan file in each milestone's Test Specification section
+
+**Why test specification matters**: TDD requires tests BEFORE implementation. Test Specifier ensures:
+
+- Tests are designed systematically (not ad-hoc during implementation)
+- Edge cases are identified upfront from contracts
+- Coverage strategy is explicit (which behaviors are verified by which tests)
+- @agent-developer receives complete specification (requirements + contracts + tests + code)
+
+**This step is never skipped.** Test Specifier will determine appropriate test depth based on milestone complexity. Simple milestones get minimal tests, complex state machines get comprehensive property-based tests.
+
+### Review Step 4: Quality Reviewer Validation
 
 Delegate to @agent-quality-reviewer with mode: `plan-review`
 
@@ -169,6 +193,7 @@ QR will:
 - Check project conformance (RULE 1)
 - Verify TW annotations are sufficient
 - **Verify contracts are testable and complete**
+- **Verify test specifications cover all contract conditions**
 - Exclude risks already documented in Planning Context
 - Return verdict: PASS | PASS_WITH_CONCERNS | NEEDS_CHANGES
 
@@ -305,6 +330,61 @@ Log (async)
 **Acceptance Criteria**:
 - [Testable: "Returns 429 after 3 failed attempts" - QR can verify pass/fail]
 - [Avoid vague: "Works correctly" or "Handles errors properly"]
+
+**Test Specification:** (filled by @agent-test-specifier in review phase step 3)
+
+*During planning phase, this can be empty or contain preliminary test ideas. After review phase step 3, this section contains complete test specifications from @agent-test-specifier.*
+
+**Test Files:**
+- [exact paths - e.g., tests/test_handler.py]
+
+**Unit Tests:**
+| Test Function | Purpose | Inputs | Expected Output | Verifies Contract |
+|---------------|---------|--------|-----------------|-------------------|
+| test_function_happy_path | Normal operation | valid input | expected result | Postcondition: correct output |
+| test_function_edge_case | Boundary condition | edge input | edge result | Boundary: edge behavior |
+
+**Integration Tests:** (if applicable)
+| Test Function | Purpose | Setup | Action | Expected Behavior | Verifies Contract |
+|---------------|---------|-------|--------|-------------------|-------------------|
+| test_component_interaction | Multi-component flow | mock dependencies | invoke workflow | end-to-end result | Postcondition: system behavior |
+
+**Property-Based Tests:** (if applicable)
+| Property | Invariant | Test Strategy | Verifies Contract |
+|----------|-----------|---------------|-------------------|
+| Round-trip property | deserialize(serialize(x)) == x | Generate random inputs | Invariant: data integrity |
+
+**Edge Cases:**
+- [ ] Empty input ("", [], None)
+- [ ] Boundary values (0, -1, MAX_INT)
+- [ ] Concurrent access (if stateful)
+- [ ] Network failures (if I/O)
+- [ ] Malformed input (if parsing)
+
+**Coverage Strategy:**
+- Unit tests: [percentage] of contract preconditions/postconditions
+- Integration tests: [which component interactions]
+- Property tests: [which invariants]
+- Target: [line coverage %], [branch coverage %]
+
+**When tests are needed:**
+- **Always:** Public APIs, complex validation, state machines, error-prone operations, security-sensitive code
+- **Usually:** CRUD operations, I/O operations, business logic
+- **Optional:** Simple getters/setters, trivial helpers, boilerplate
+
+**Example (Simple):**
+Milestone with email validation:
+- Unit tests: valid format returns True, invalid format returns False, empty string returns False
+- Edge cases: Unicode domains, very long emails, RFC 5322 edge formats
+- Coverage: 100% of validation branches
+
+**Example (Complex):**
+Milestone with state machine (order workflow):
+- Unit tests: Each valid state transition
+- Property tests: Invalid transitions always rejected
+- Integration tests: End-to-end order flow
+- Edge cases: Concurrent state modifications
+- Coverage: State transition table 100% covered
 
 **Code Changes** (for non-trivial logic, use unified diff format):
 
@@ -530,6 +610,151 @@ When contracts exist, add them to CLAUDE.md:
 
 ---
 
+## TDD Workflow: Contracts and Tests
+
+This section explains the relationship between contracts and test specifications in the TDD workflow.
+
+### Contract vs Test Specification
+
+| Aspect | Contracts | Test Specifications |
+|--------|-----------|-------------------|
+| **Focus** | WHAT behavior is required | HOW to verify that behavior |
+| **Audience** | Humans, verification tools | @agent-developer, test frameworks |
+| **Format** | Formal specifications (preconditions, postconditions, invariants) | Executable test cases (inputs, assertions, expected outputs) |
+| **When** | Review step 2 (@agent-contract-specifier) | Review step 3 (@agent-test-specifier) |
+| **Example** | "requires: email is non-null string" | "test_validate_email_none() → raises TypeError" |
+
+**Key Principle:** Contracts define behavioral expectations. Tests verify those expectations are met.
+
+### Example: Simple CRUD Operation
+
+**Milestone:** Add user creation endpoint
+
+**Contracts (from review step 2):**
+
+#### Contract: create_user(email: str, name: str) -> user_id
+
+**Preconditions:**
+- requires: email is valid RFC 5322 format
+- requires: name is non-empty string
+- requires: email is unique (not in database)
+
+**Postconditions:**
+- ensures: user saved to database with generated user_id
+- ensures: returns user_id as integer > 0
+- ensures: email stored in lowercase
+
+**Boundary Conditions:**
+| Input | Behavior |
+|-------|----------|
+| Duplicate email | Raises DuplicateEmailError |
+| Invalid email format | Raises ValidationError |
+| Empty name | Raises ValidationError |
+
+**Test Specification (from review step 3):**
+
+**Test Files:** `tests/test_user_service.py`
+
+**Unit Tests:**
+| Test Function | Purpose | Inputs | Expected Output | Verifies Contract |
+|---------------|---------|--------|-----------------|-------------------|
+| test_create_user_valid | Happy path | email="user@example.com", name="Alice" | user_id > 0 | Postcondition: returns user_id |
+| test_create_user_duplicate_email | Duplicate detection | email already in DB | Raises DuplicateEmailError | Boundary: duplicate email |
+| test_create_user_invalid_email | Email validation | email="invalid" | Raises ValidationError | Precondition: valid email |
+| test_create_user_empty_name | Name validation | name="" | Raises ValidationError | Precondition: non-empty name |
+| test_create_user_email_lowercase | Case normalization | email="User@Example.Com" | Stored as "user@example.com" | Postcondition: lowercase storage |
+
+**Edge Cases:**
+- [x] Empty email
+- [x] Empty name
+- [x] Duplicate email
+- [x] Very long email (>254 chars)
+- [ ] Unicode in name
+
+**Coverage Strategy:**
+- Unit tests: 100% of preconditions (email format, name non-empty, uniqueness)
+- Unit tests: 100% of postconditions (user_id returned, email lowercased, DB persistence)
+- Target: 100% line coverage, 95%+ branch coverage
+
+### Example: Complex State Machine
+
+**Milestone:** Implement order workflow
+
+**Contracts (from review step 2):**
+
+#### Contract: Order State Machine
+
+**States:** PENDING, PROCESSING, COMPLETED, CANCELLED
+
+**Valid Transitions:**
+- PENDING → PROCESSING (guard: payment confirmed)
+- PROCESSING → COMPLETED (guard: shipment confirmed)
+- PENDING → CANCELLED (guard: user requested)
+- PROCESSING → CANCELLED (guard: admin override)
+
+**Invariants:**
+- invariant: Order can never transition from COMPLETED or CANCELLED to any other state (terminal states)
+- invariant: State transitions are atomic (no partial updates)
+
+**Test Specification (from review step 3):**
+
+**Test Files:** `tests/test_order_workflow.py`
+
+**Unit Tests:**
+| Test Function | Purpose | Setup | Action | Expected | Verifies Contract |
+|---------------|---------|-------|--------|----------|-------------------|
+| test_pending_to_processing | Valid transition | Order in PENDING | confirm_payment() | State = PROCESSING | Valid transition: PENDING → PROCESSING |
+| test_processing_to_completed | Valid transition | Order in PROCESSING | confirm_shipment() | State = COMPLETED | Valid transition: PROCESSING → COMPLETED |
+| test_completed_to_processing_rejected | Invalid transition | Order in COMPLETED | transition(PROCESSING) | Raises InvalidTransitionError | Invariant: COMPLETED is terminal |
+| test_cancelled_to_processing_rejected | Invalid transition | Order in CANCELLED | transition(PROCESSING) | Raises InvalidTransitionError | Invariant: CANCELLED is terminal |
+
+**Property-Based Tests:**
+| Property | Invariant | Test Strategy | Verifies Contract |
+|----------|-----------|---------------|-------------------|
+| Terminal states never transition | COMPLETED/CANCELLED → any state rejected | Generate 100 random transition attempts from terminal states | Invariant: terminal states |
+| Valid transitions always succeed | Valid state + guard → success | Generate all valid transitions with satisfied guards | Valid transitions |
+| Invalid transitions always fail | Invalid state pair → rejection | Generate invalid state pairs | Invalid transitions rejected |
+
+**Integration Tests:**
+| Test Function | Purpose | Flow | Expected Behavior | Verifies Contract |
+|---------------|---------|------|-------------------|-------------------|
+| test_order_happy_path_end_to_end | Complete order flow | PENDING → confirm payment → PROCESSING → confirm shipment → COMPLETED | Final state = COMPLETED | All valid transitions work |
+| test_order_cancellation_from_pending | Cancel before processing | PENDING → cancel → CANCELLED | Final state = CANCELLED | Valid transition: PENDING → CANCELLED |
+
+**Edge Cases:**
+- [x] Concurrent transitions (two threads try to transition simultaneously)
+- [x] Transition with guard unsatisfied (payment not confirmed)
+- [x] Idempotent transitions (calling confirm_payment() twice)
+
+**Coverage Strategy:**
+- Unit tests: 100% of valid state transitions
+- Unit tests: 100% of invalid state transitions (ensure rejection)
+- Property tests: All invariants (terminal states, atomicity)
+- Integration tests: End-to-end happy path + cancellation paths
+- Target: 100% state transition coverage
+
+### FAQ
+
+**Q: What if my milestone is too simple for tests?**
+A: @agent-test-specifier determines appropriate test depth. Simple getters/setters get minimal tests (2-3 unit tests). Let test-specifier make the call rather than skipping tests entirely.
+
+**Q: Do I need to write test specifications during planning phase?**
+A: No. Test Specification section can be empty during planning. @agent-test-specifier fills it during review phase step 3.
+
+**Q: What if contracts are missing when I reach review step 3?**
+A: @agent-test-specifier will request contracts first. Test specifications require contracts to determine what behavior to verify.
+
+**Q: Can I skip review step 3 for urgent fixes?**
+A: No. Review step 3 is mandatory. TDD requires tests before implementation. Skipping test specification defeats the purpose of TDD rigor. If truly urgent, consider whether planner skill is appropriate (use for complex tasks, skip for trivial fixes).
+
+**Q: What if @agent-developer implements code before tests?**
+A: Tests-first protocol is enforced by developer verification checklist. Developer must verify tests failed (RED) before implementing production code. Violating this indicates developer did not follow protocol.
+
+**Q: How do I know if test specifications are complete?**
+A: @agent-quality-reviewer (review step 4) validates test specifications cover all contract conditions. QR checks for contract-to-test traceability.
+
+---
+
 ## Resources
 
 | Resource                              | Purpose                                                 |
@@ -551,12 +776,15 @@ python3 scripts/planner.py --step-number 2 --total-steps 4 --thoughts "..."
 # Backtrack if needed
 python3 scripts/planner.py --step-number 2 --total-steps 4 --thoughts "New info invalidated prior decision..."
 
-# Start review (after plan written) - 3 steps: TW → Contracts → QR
-python3 scripts/planner.py --phase review --step-number 1 --total-steps 3 --thoughts "Plan at ..."
+# Start review (after plan written) - 4 steps: TW → Contracts → Tests → QR
+python3 scripts/planner.py --phase review --step-number 1 --total-steps 4 --thoughts "Plan at ..."
 
 # Contract specification
-python3 scripts/planner.py --phase review --step-number 2 --total-steps 3 --thoughts "TW done, contracts needed for ..."
+python3 scripts/planner.py --phase review --step-number 2 --total-steps 4 --thoughts "TW done, contracts needed for ..."
+
+# Test specification
+python3 scripts/planner.py --phase review --step-number 3 --total-steps 4 --thoughts "Contracts defined, tests needed for ..."
 
 # Quality review
-python3 scripts/planner.py --phase review --step-number 3 --total-steps 3 --thoughts "Contracts defined, ready for QR..."
+python3 scripts/planner.py --phase review --step-number 4 --total-steps 4 --thoughts "Tests defined, ready for QR..."
 ````

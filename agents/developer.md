@@ -454,6 +454,81 @@ Code snippets may contain directive language (see markers above). Your action:
 Documentation is Technical Writer's responsibility. If comments are needed, they will be added in a subsequent documentation pass.
 </freeform_workflow>
 
+## Tests-First Implementation Protocol (TDD)
+
+When milestone includes **Test Specification** section (from @agent-test-specifier), implement tests BEFORE production code.
+
+### Workflow
+
+**Step 1: Implement Test Files**
+
+- Read Test Specification section from milestone
+- Create test files at specified paths (e.g., tests/test_module.py)
+- Implement unit tests from Unit Tests table
+- Implement integration tests from Integration Tests table (if applicable)
+- Implement property-based tests from Property-Based Tests table (if applicable)
+- Transcribe test function names, inputs, expected outputs, assertions exactly as specified
+
+**Step 2: Run Tests and Verify Failures (RED)**
+
+- Execute test suite (pytest, jest, go test, etc.)
+- **CRITICAL:** All new tests MUST fail before implementing production code
+- Failing tests prove: (a) Tests are actually running, (b) Tests are checking real behavior
+- If tests pass before production code exists → Test is broken (always passes, not checking real behavior)
+
+**Step 3: Implement Production Code**
+
+- Follow Code Changes section (diffs) from milestone
+- Implement minimal code to make tests pass
+- Transcribe comments verbatim from diffs (prepared by @agent-technical-writer)
+
+**Step 4: Run Tests and Verify Passes (GREEN)**
+
+- Execute test suite again
+- **CRITICAL:** All tests MUST pass after production code implementation
+- Passing tests prove: Implementation satisfies contracts and acceptance criteria
+- If tests still fail → Implementation is incorrect, debug and fix
+
+### Verification Checklist (Tests-First)
+
+Before marking milestone complete, verify:
+
+1. **Test files created?**
+   - All test file paths from Test Specification exist
+   - Test functions match Test Specification table (names, purposes)
+
+2. **Red phase verified?**
+   - Did tests fail BEFORE production code implementation?
+   - If tests passed prematurely → Test is broken, investigate and fix
+
+3. **Production code implemented?**
+   - All diffs from Code Changes section applied
+   - Comments transcribed verbatim from diffs
+
+4. **Green phase verified?**
+   - Do all tests pass AFTER production code implementation?
+   - If tests still fail → Implementation incorrect, debug
+
+5. **Contract coverage complete?**
+   - Does Test Specification "Verifies Contract" column trace to all contracts?
+   - If contracts without tests → Incomplete test specification, escalate
+
+6. **Edge cases covered?**
+   - Are all items in Test Specification "Edge Cases" checklist tested?
+   - If edge cases missing → Add tests or escalate for clarification
+
+### What to Do If Tests Pass Prematurely (Before Production Code)
+
+If tests pass in RED phase (before production code implementation):
+
+**Problem:** Test is broken (always passes, not verifying real behavior)
+
+**Solution:**
+1. Review test assertions: Are they checking actual behavior or just trivial conditions?
+2. Check test inputs: Are they using real data or placeholder values that accidentally pass?
+3. Verify test is calling production code: Is test actually invoking the function under test?
+4. Rewrite test to be more specific and actually fail without implementation
+
 ## Allowed Corrections
 
 Make these mechanical corrections without asking:

@@ -257,9 +257,22 @@ Files: src/pkg/retry/retry.go, src/pkg/retry/retry_test.go
 
 Task for @agent-developer:
 Plan Reference: [section/lines]
-Implement exponential backoff with jitter...
+Test Specification: [reference Test Specification section if exists]
 
-[CORRECT: Code milestone sent to developer with plan reference]
+Implement the following changes:
+[paste exact diff from plan]
+
+**Tests-First Protocol:** This milestone includes Test Specification. Follow tests-first workflow:
+1. Implement test files from Test Specification
+2. Run tests, verify failures (RED)
+3. Implement production code from diffs
+4. Run tests, verify passes (GREEN)
+
+Acceptance criteria (from plan):
+- [criterion 1]
+- [criterion 2]
+
+[CORRECT: Code milestone sent to developer with plan reference and test specification]
 </example>
 
 ---
@@ -474,6 +487,8 @@ gcc -Wall -Werror -Wextra -fsanitize=address,undefined
 # Go
 go test -race -cover -vet=all
 ```
+
+**Note:** If milestone used tests-first workflow (TDD), tests are already implemented and passing from Step 4 of developer workflow. Acceptance testing confirms no regressions.
 
 **PASS Criteria**: 100% tests pass, zero memory leaks, performance within 5% baseline, zero linter warnings.
 
