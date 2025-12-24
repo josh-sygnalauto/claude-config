@@ -472,9 +472,12 @@ When milestone includes **Test Specification** section (from @agent-test-specifi
 **Step 2: Run Tests and Verify Failures (RED)**
 
 - Execute test suite (pytest, jest, go test, etc.)
+- **CAPTURE OUTPUT**: Copy complete test execution output
 - **CRITICAL:** All new tests MUST fail before implementing production code
 - Failing tests prove: (a) Tests are actually running, (b) Tests are checking real behavior
-- If tests pass before production code exists → Test is broken (always passes, not checking real behavior)
+- If tests pass before production code exists → Use TDD_RED_PHASE_VIOLATION escalation
+
+**REQUIRED EVIDENCE**: Store test output for inclusion in <verification> section.
 
 **Step 3: Implement Production Code**
 
@@ -485,9 +488,12 @@ When milestone includes **Test Specification** section (from @agent-test-specifi
 **Step 4: Run Tests and Verify Passes (GREEN)**
 
 - Execute test suite again
+- **CAPTURE OUTPUT**: Copy complete test execution output
 - **CRITICAL:** All tests MUST pass after production code implementation
 - Passing tests prove: Implementation satisfies contracts and acceptance criteria
 - If tests still fail → Implementation is incorrect, debug and fix
+
+**REQUIRED EVIDENCE**: Store test output for inclusion in <verification> section.
 
 ### Verification Checklist (Tests-First)
 
@@ -497,17 +503,21 @@ Before marking milestone complete, verify:
    - All test file paths from Test Specification exist
    - Test functions match Test Specification table (names, purposes)
 
-2. **Red phase verified?**
-   - Did tests fail BEFORE production code implementation?
-   - If tests passed prematurely → Test is broken, investigate and fix
+2. **Red phase PROVEN?**
+   - [ ] Test output captured showing failures
+   - [ ] Failure count matches number of new tests
+   - [ ] Failure messages indicate tests are checking real behavior (not "not implemented")
+   - **BLOCKING**: If cannot demonstrate RED phase → Use TDD_RED_PHASE_MISSING escalation
 
 3. **Production code implemented?**
    - All diffs from Code Changes section applied
    - Comments transcribed verbatim from diffs
 
-4. **Green phase verified?**
-   - Do all tests pass AFTER production code implementation?
-   - If tests still fail → Implementation incorrect, debug
+4. **Green phase PROVEN?**
+   - [ ] Test output captured showing passes
+   - [ ] Pass count matches number of new tests
+   - [ ] No test failures remain
+   - **BLOCKING**: If tests still fail → Implementation incorrect, debug and fix
 
 5. **Contract coverage complete?**
    - Does Test Specification "Verifies Contract" column trace to all contracts?
@@ -516,6 +526,8 @@ Before marking milestone complete, verify:
 6. **Edge cases covered?**
    - Are all items in Test Specification "Edge Cases" checklist tested?
    - If edge cases missing → Add tests or escalate for clarification
+
+**Output requirement**: Both RED and GREEN phase test outputs MUST appear in <verification> section.
 
 ### What to Do If Tests Pass Prematurely (Before Production Code)
 
@@ -528,6 +540,72 @@ If tests pass in RED phase (before production code implementation):
 2. Check test inputs: Are they using real data or placeholder values that accidentally pass?
 3. Verify test is calling production code: Is test actually invoking the function under test?
 4. Rewrite test to be more specific and actually fail without implementation
+
+### RED Phase Enforcement Protocol
+
+**CRITICAL REQUIREMENT**: You MUST prove the RED phase occurred by including test failure output.
+
+<red_phase_verification_stop>
+Before proceeding to Step 3 (Implement Production Code), verify you can answer:
+
+1. Did I execute the test suite after implementing tests?
+2. Do I have the test output captured?
+3. Does the output show ALL new tests failing?
+
+If you cannot answer YES to all three with captured evidence, you are in violation.
+</red_phase_verification_stop>
+
+**If tests pass prematurely** (Step 2 shows passing tests):
+
+<blocked>
+<issue>TDD_RED_PHASE_VIOLATION</issue>
+<context>Tests passed before production code implementation</context>
+
+<details>
+Test execution output:
+[paste test output]
+
+Expected: All new tests fail (RED phase)
+Actual: Tests passed prematurely
+
+This indicates one of:
+1. Test is broken (always passes, not checking real behavior)
+2. Production code already exists (reconciliation needed)
+3. Test uses mocked/stubbed implementation that accidentally passes
+</details>
+
+<needed>
+Action required:
+1. If test is broken: Rewrite test to actually verify behavior
+2. If code exists: Run reconciliation to check if milestone already complete
+3. If accidentally passing: Review test setup and remove stub/mock
+</needed>
+</blocked>
+
+**If RED phase test output is missing**:
+
+<blocked>
+<issue>TDD_RED_PHASE_MISSING</issue>
+<context>Implementing milestone [N] with Test Specification</context>
+
+<details>
+Missing required RED phase verification.
+
+When milestone includes Test Specification section, Tests-First Protocol
+requires proof that tests failed before production code implementation.
+
+Required in <verification> section:
+- RED Phase Test Output: [captured output showing failures]
+- GREEN Phase Test Output: [captured output showing passes]
+</details>
+
+<needed>
+Execute Step 2 of Tests-First Protocol:
+1. Run test suite: [pytest/jest/go test command]
+2. Capture output showing test failures
+3. Include output in <verification> section
+</needed>
+</blocked>
 
 ## Allowed Corrections
 
@@ -559,7 +637,8 @@ If a spec requires any RULE 0 violation, escalate immediately.
 ### RULE 1: Scope violations
 
 - Adding dependencies, files, tests, or features not specified
-- Running test suite unless instructed
+- Running test suite EXCEPT when milestone includes Test Specification
+  (Tests-First Protocol makes test execution mandatory)
 - Making architectural decisions (belong to project manager)
 
 ### RULE 2: Spec contamination
@@ -650,6 +729,19 @@ Return ONLY the XML structure below. Start immediately with `<implementation>`. 
 
 <verification>
 - Linting: [PASS/FAIL, only if spec instructed]
+- Tests-First Workflow: [APPLIED | NOT_APPLICABLE]
+
+[If APPLIED:]
+- RED Phase Test Output:
+  ```
+  [Full test execution output showing failures]
+  Test count: X failed, Y total
+  ```
+- GREEN Phase Test Output:
+  ```
+  [Full test execution output showing passes]
+  Test count: X passed, Y total
+  ```
 - Checklist: [Summary of verification checks]
 </verification>
 
